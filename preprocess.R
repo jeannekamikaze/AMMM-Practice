@@ -12,7 +12,7 @@ generate_representative = function(image, size, set_of_pixels_indices, clusters 
     return(Mclust(data = scribbled_pixels[subset,], G = clusters)$parameters);
 }
 
-compute_distance_to_classes = function(image, scribble, size, filename) {
+compute_distance_to_classes = function(image, scribble, size, filename, outputFile) {
     clusters <- 5                                                                                                       #Number of clusters to describe each class. (5 is the value used by the authors)
 
     representatives_class_0 <- generate_representative(image, size, which(scribble[,,4] == 1  & scribble[,,1] == 1), 
@@ -35,34 +35,56 @@ compute_distance_to_classes = function(image, scribble, size, filename) {
     min_distances_class_0 <- apply(distances_class_0, 1, min);
     min_distances_class_1 <- apply(distances_class_1, 1, min);
 
-    writePNG(normalize(matrix(min_distances_class_1, nrow = 512, ncol = 512)), paste(filename, "_distances_1.png", sep = ""));
-    writePNG(normalize(matrix(min_distances_class_0, nrow = 512, ncol = 512)), paste(filename, "_distances_0.png", sep = ""));
+    #min <- min(c(min_distances_class_0, min_distances_class_1));
+    #max <- max(c(min_distances_class_0, min_distances_class_1));
+    
+    #writePNG((matrix(min_distances_class_0, nrow = size, ncol = size) - min)/(max - min), paste(filename, "_distances_0.png", sep = ""));
+    #writePNG((matrix(min_distances_class_1, nrow = size, ncol = size) - min)/(max - min), paste(filename, "_distances_1.png", sep = ""));
+
+    writePNG(normalize(matrix(min_distances_class_1, nrow = size, ncol = size)), paste(filename, "_distances_1.png", sep = ""));
+    writePNG(normalize(matrix(min_distances_class_0, nrow = size, ncol = size)), paste(filename, "_distances_0.png", sep = ""));
+
+    tmp <- apply(matrix(min_distances_class_0, nrow = size, ncol = size),   1, function(x) { return(paste(x, collapse=" ")) });
+    tmp <- apply(t(tmp), 2, function(x) { return(paste("[", x, "]", sep = "")) });
+    writeLines(c("\nMIN0 = [", tmp, "];"), outputFile);
+
+    tmp <- apply(matrix(min_distances_class_1, nrow = size, ncol = size),   1, function(x) { return(paste(x, collapse=" ")) });
+    tmp <- apply(t(tmp), 2, function(x) { return(paste("[", x, "]", sep = "")) });
+    writeLines(c("\nMIN1 = [", tmp, "];"), outputFile);
 }
 
-compute_neighbor_coefficients = function(image, size, filename) {
+compute_neighbor_coefficients = function(image, size, filename, outputFile) {
     right <- matrix(0, nrow = 3, ncol = 3);
     right[2, 2] <- 1;
-    right[2, 3] <- -1;
+    right[2, 1] <- -1;
 
     right_neighbor_differences <- filter2(image, right)[, 1:(size-1), ];
-    right_neighbor_differences_norm <- right_neighbor_differences[,,1]^2 + right_neighbor_differences[,,1]^2 
-                                       + right_neighbor_differences[,,3]^2;
+    right_neighbor_differences_norm <- right_neighbor_differences[,,1]^2 + right_neighbor_differences[,,1]^2 + 
+                                       right_neighbor_differences[,,3]^2;
 
     down <- matrix(0, nrow = 3, ncol = 3);
     down[2, 2] <- 1;
-    down[3, 2] <- -1;
+    down[1, 2] <- -1;
 
     down_neighbor_differences <- filter2(image, down)[1:(size-1), , ];
-    down_neighbor_differences_norm <- down_neighbor_differences[,,1]^2 + down_neighbor_differences[,,2]^2 
-                                      + down_neighbor_differences[,,3]^2;
+    down_neighbor_differences_norm <- down_neighbor_differences[,,1]^2 + down_neighbor_differences[,,2]^2 + 
+                                      down_neighbor_differences[,,3]^2;
 
     sigma <- 2*mean(c(right_neighbor_differences_norm, down_neighbor_differences_norm));
 
     coefficients_right <- exp(-right_neighbor_differences_norm/(sigma));
     coefficients_down <- exp(-down_neighbor_differences_norm/(sigma));
 
-    writePNG(normalize(matrix(coefficients_right, nrow = 512, ncol = 511)), paste(filename, "_coefficients_right.png", sep= ""));
-    writePNG(normalize(matrix(coefficients_down, nrow = 511, ncol = 512)), paste(filename, "_coefficients_down.png", sep = ""));
+    writePNG(normalize(matrix(coefficients_right, nrow = size, ncol = size-1)), paste(filename, "_coefficients_right.png", sep= ""));
+    writePNG(normalize(matrix(coefficients_down, nrow = size-1, ncol = size)), paste(filename, "_coefficients_down.png", sep = ""));
+
+    tmp <- apply(coefficients_right,   1, function(x) { return(paste(x, collapse=" ")) });
+    tmp <- apply(t(tmp), 2, function(x) { return(paste("[", x, "]", sep = "")) });
+    writeLines(c("\nRIGHT = [", tmp, "];"), outputFile);
+
+    tmp <- apply(coefficients_down,   1, function(x) { return(paste(x, collapse=" ")) });
+    tmp <- apply(t(tmp), 2, function(x) { return(paste("[", x, "]", sep = "")) });
+    writeLines(c("\nDOWN = [", tmp, "];"), outputFile);
 }
 
 generate_labelling_coefficients = function(filename) {
@@ -79,6 +101,12 @@ generate_labelling_coefficients = function(filename) {
     scribble <- array(scribble, c(size, size, 4));                            
     image <- array(image, c(size, size, 4))[,,1:3];                                                                     #Discarding alpha channel.
 
-    compute_distance_to_classes(image, scribble, size, filename);
-    compute_neighbor_coefficients(image, size, filename);
+    outputFile <- file(paste(filename, ".dat", sep = ""), "w");
+    on.exit(close(outputFile));
+    writeLines(c(paste("size = ", size, ";", sep = "")), outputFile);
+
+    compute_distance_to_classes(image, scribble, size, filename, outputFile);
+    compute_neighbor_coefficients(image, size, filename, outputFile);
 }
+
+
