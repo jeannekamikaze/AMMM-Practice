@@ -34,6 +34,7 @@ compute_distance_to_classes = function(image, scribble, size, filename, outputFi
 
     min_distances_class_0 <- apply(distances_class_0, 1, min);
     min_distances_class_1 <- apply(distances_class_1, 1, min);
+    distances <- min_distances_class_0 - min_distances_class_1
 
     #min <- min(c(min_distances_class_0, min_distances_class_1));
     #max <- max(c(min_distances_class_0, min_distances_class_1));
@@ -43,14 +44,11 @@ compute_distance_to_classes = function(image, scribble, size, filename, outputFi
 
     writePNG(normalize(matrix(min_distances_class_1, nrow = size, ncol = size)), paste(filename, "_distances_1.png", sep = ""));
     writePNG(normalize(matrix(min_distances_class_0, nrow = size, ncol = size)), paste(filename, "_distances_0.png", sep = ""));
+    writePNG(normalize(matrix(distances, nrow = size, ncol = size)), paste(filename, "_distances.png", sep = ""));
 
-    tmp <- apply(matrix(min_distances_class_0, nrow = size, ncol = size),   1, function(x) { return(paste(x, collapse=" ")) });
+    tmp <- apply(matrix(distances, nrow = size, ncol = size),   1, function(x) { return(paste(x, collapse=" ")) });
     tmp <- apply(t(tmp), 2, function(x) { return(paste("[", x, "]", sep = "")) });
-    writeLines(c("\nMIN0 = [", tmp, "];"), outputFile);
-
-    tmp <- apply(matrix(min_distances_class_1, nrow = size, ncol = size),   1, function(x) { return(paste(x, collapse=" ")) });
-    tmp <- apply(t(tmp), 2, function(x) { return(paste("[", x, "]", sep = "")) });
-    writeLines(c("\nMIN1 = [", tmp, "];"), outputFile);
+    writeLines(c("\nD = [", tmp, "];"), outputFile);
 }
 
 compute_neighbor_coefficients = function(image, size, filename, outputFile) {
