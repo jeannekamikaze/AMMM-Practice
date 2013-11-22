@@ -7,13 +7,13 @@ generate_representative = function(image, size, set_of_pixels_indices, clusters 
                               image[cbind(indexes,2)],
                               image[cbind(indexes,3)]);
     
-    subset <- sample(1:length(scribbled_pixels)/3, 1000, replace = FALSE)
+    subset <- sample(1:length(scribbled_pixels)/3, 1000, replace = FALSE);
 
     return(Mclust(data = scribbled_pixels[subset,], G = clusters)$parameters);
 }
 
 compute_distance_to_classes = function(image, scribble, size, filename, outputFile) {
-    clusters <- 5                                                                                                       #Number of clusters to describe each class. (5 is the value used by the authors)
+    clusters <- 5                                                                                                      #Number of clusters to describe each class. (5 is the value used by the authors)
 
     representatives_class_0 <- generate_representative(image, size, which(scribble[,,4] == 1  & scribble[,,1] == 1), 
         clusters);
@@ -41,6 +41,8 @@ compute_distance_to_classes = function(image, scribble, size, filename, outputFi
     
     #writePNG((matrix(min_distances_class_0, nrow = size, ncol = size) - min)/(max - min), paste(filename, "_distances_0.png", sep = ""));
     #writePNG((matrix(min_distances_class_1, nrow = size, ncol = size) - min)/(max - min), paste(filename, "_distances_1.png", sep = ""));
+
+    distances <- (distances)/sd(distances);
 
     writePNG(normalize(matrix(min_distances_class_1, nrow = size, ncol = size)), paste(filename, "_distances_1.png", sep = ""));
     writePNG(normalize(matrix(min_distances_class_0, nrow = size, ncol = size)), paste(filename, "_distances_0.png", sep = ""));
@@ -97,7 +99,7 @@ generate_labelling_coefficients = function(filename) {
     size <- sqrt(length(scribble) / channels);                                                                          #Assuming square images.
 
     scribble <- array(scribble, c(size, size, 4));                            
-    image <- array(image, c(size, size, 4))[,,1:3];                                                                     #Discarding alpha channel.
+    image <- array(image, c(size, size, 3))[,,1:3];                                                                     #Discarding alpha channel.
 
     outputFile <- file(paste(filename, ".dat", sep = ""), "w");
     on.exit(close(outputFile));
