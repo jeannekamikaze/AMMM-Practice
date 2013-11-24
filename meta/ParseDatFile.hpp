@@ -11,9 +11,9 @@ public:
 	string path;
 	ifstream buffer;
 
-	ParseDatFile (std::string _path) : path(_path){};
+	ParseDatFile (string _path) : path(_path){};
 
-	void parseDandZ(cv::Mat& delta, cv::Mat& w) {
+	void parseDandZ(Mat& delta, Mat& w) {
 		vector<Mat> matrices = parseMatrices();
 		if(matrices.size() != 3) throw "we should have exacly 3 matrices in the .dat file";
 		delta = matrices[0];
