@@ -17,6 +17,14 @@ public:
 		vector<Mat> matrices = parseMatrices();
 		if(matrices.size() != 3) throw "we should have exacly 3 matrices in the .dat file";
 		delta = matrices[0];
+
+		cout <<"W_R size:" << matrices[1].size().height << endl;
+		cout <<"W_D size:" << matrices[2].size().width << endl;
+
+		Mat col = Mat::zeros(matrices[1].size().height, 1, CV_32FC1);
+		cv::hconcat(matrices[1], col, matrices[1]);
+		Mat row = Mat::zeros(1, matrices[2].size().width, CV_32FC1);
+		matrices[2].push_back(row);
 		merge(vector<Mat>(matrices.begin()+1,matrices.end()), w);	
 	}
 
