@@ -1,3 +1,5 @@
+#pragma once
+
 #include <opencv2/opencv.hpp>
 
 class ObjFunc
@@ -22,8 +24,14 @@ public:
 
     /// Evaluate the objective function for the given image.
     template <class Mat>
-    R operator() (const Mat& mat) {
+    R operator() (Mat mat) const {
+        return eval(width, height, lambda, d, w, mat);
+    }
+    
+    template <class Mat>
+    static R eval (int width, int height, R lambda,  const cv::Mat& d, const cv::Mat& w, const Mat& mat) {
         R n = 0;
+        // Inner matrix
         for (int i = 0; i < height-1; ++i) {
             for (int j = 0; j < width-1; ++j) {
                 n += d.at<float>(i,j) * mat(i,j); // d_i * x_i
@@ -31,6 +39,18 @@ public:
                 n += lambda * p[0] * abs(mat(i,j) - mat(i,j+1)); // w_ij * |x_i - x_j| (right)
                 n += lambda * p[1] * abs(mat(i,j) - mat(i+1,j)); // w_ij * |x_i - x_j| (down)
             }
+        }
+        // Last row
+        int last_row = height-1;
+        for (int j = 0; j < width-1; ++j) {
+            n += d.at<float>(last_row,j) * mat(last_row,j); // d_i * x_i
+            n += lambda * w.at<cv::Vec2f>(last_row,j)[0] * abs(mat(last_row,j) - mat(last_row,j+1)); // w_ij * |x_i - x_j| (right)
+        }
+        // Last col
+        int last_col = width-1;
+        for (int i = 0; i < height-1; ++i) {
+            n += d.at<float>(i,last_col) * mat(i,last_col); // d_i * x_i
+            n += lambda * w.at<cv::Vec2f>(i,last_col)[1] * abs(mat(i,last_col) - mat(i+1,last_col)); // w_ij * |x_i - x_j| (down)
         }
         return n;
     }
