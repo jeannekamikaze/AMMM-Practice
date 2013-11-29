@@ -9,7 +9,7 @@
     channels <- 4;
     size <- sqrt(length(image) / channels);                
 
-    image <- array(image, c(size, size, 3))[,,1:3];    
+    image <- array(image, c(size, size, 4))[,,1:3];    
 
     pixels_foreground <- matrix(image, nrow = size*size, ncol = 3);
     pixels_background <- matrix(image, nrow = size*size, ncol = 3);
