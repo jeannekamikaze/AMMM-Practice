@@ -4,8 +4,8 @@
 
 using namespace cv;using namespace std;
 
-int const lambda = 0;
-int const MAX_IT_G = 10;
+int const lambda = 0.2;
+int const MAX_IT_G = 20;
 int const MAX_IT_H = 100000;
 
 class CVWrap
@@ -57,17 +57,23 @@ private:
 		float best_fit = (*obj)(cmat);
 
 		cout << "Fit0: " << best_fit << endl;
+
+		#pragma omp parallel for shared(best_fit, best_sol) schedule(dynamic) //num_threads(4)
 		for(int i = 1; i < MAX_IT_G; ++i) {
 			Mat sol = SolGen::generate_solution(dists, w_coef, s_fg, s_bg);
 			sol = hill_climing(sol);
 			cmat = CVWrap(sol);
 			float fit = (*obj)(cmat);
-			cout << "Fit" << i << ": " << best_fit << endl;
-			if(fit < best_fit) {
-				best_sol = sol;
-				best_fit = fit;
+			cout << "Fit" << i << ": " << fit << endl;
+			#pragma omp critical (update_best)
+        	{
+				if(fit < best_fit) {
+					best_sol = sol;
+					best_fit = fit;
+				}
 			}
 		}
+		cout << "Best Fit: " << best_fit << endl;
 		return best_sol;
 	}
 
