@@ -1,10 +1,10 @@
-all: g_test
+all: grasp_seg
 
-g_test: main.cc ImageSeg.hpp SolGen.hpp
+grasp_seg: main.cc ImageSeg.hpp SolGen.hpp
 	$(CXX) -o $@ $^ -lopencv_core -lopencv_imgproc -lopencv_highgui
 
 relase: main.cc ImageSeg.hpp SolGen.hpp
-	$(CXX) -o $@ $^ -lopencv_core -lopencv_imgproc -lopencv_highgui -O3
+	$(CXX) -o grasp_seg $^ -lopencv_core -lopencv_imgproc -lopencv_highgui -O3
 
 clean:
-	@rm -rf g_test relase
+	@rm -rf grasp_seg
