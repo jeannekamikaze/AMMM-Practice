@@ -1,11 +1,13 @@
 #include <opencv2/opencv.hpp>
 #include "../ObjFunc.h"
 #include "SolGen.hpp"
+#include <time.h>
 
-using namespace cv;using namespace std;
+using namespace cv;
+using namespace std;
 
-int const lambda = 0.2;
-int const MAX_IT_G = 20;
+int const lambda = 0.1;
+int const MAX_IT_G = 10;
 int const MAX_IT_H = 100000;
 
 class CVWrap
@@ -23,6 +25,9 @@ public:
 class ImageSeg {
 public:
 	ImageSeg(Mat _img, Mat _sc, Mat _d, Mat _w) : img(_img), dists(_d), w_coef(_w){
+		//Random seed global Init
+		cv::theRNG().state = time(NULL);
+
 		vector<Mat> layers;
 		split(_sc, layers);
 		threshold(layers[2], s_fg, 0, 1,THRESH_BINARY);
@@ -52,6 +57,7 @@ private:
 
 	Mat grasp () {
 		Mat best_sol = SolGen::generate_solution(dists, w_coef, s_fg, s_bg);
+//		imshow("Sol: ", best_sol*255);
 		best_sol = hill_climing(best_sol);
 		CVWrap cmat(best_sol);
 		float best_fit = (*obj)(cmat);
@@ -65,7 +71,7 @@ private:
 			cmat = CVWrap(sol);
 			float fit = (*obj)(cmat);
 			cout << "Fit" << i << ": " << fit << endl;
-			#pragma omp critical (update_best)
+			#pragma omp critical (update_best_sol)
         	{
 				if(fit < best_fit) {
 					best_sol = sol;
@@ -98,8 +104,8 @@ private:
 	double local_fit(const Mat &aux, int i, int j) {
 		double local_fit = dists.at<float>(i,j) * (int)aux.at<char>(i,j); // d_i * x_i
     	Vec2f p = w_coef.at<cv::Vec2f>(i,j);
-    	local_fit += lambda * p[0] * abs((int)aux.at<char>(i,j) - (int)aux.at<char>(i,j+1)); // w_ij * |x_i - x_j| (right)
-    	local_fit += lambda * p[1] * abs((int)aux.at<char>(i,j) - (int)aux.at<char>(i+1,j)); // w_ij * |x_i - x_j| (down)
+    	if(j < aux.size().width-1)local_fit += lambda * p[0] * abs((int)aux.at<char>(i,j) - (int)aux.at<char>(i,j+1)); // w_ij * |x_i - x_j| (right)
+    	if(i < aux.size().height-1)local_fit += lambda * p[1] * abs((int)aux.at<char>(i,j) - (int)aux.at<char>(i+1,j)); // w_ij * |x_i - x_j| (down)
     	return local_fit;
 	}
 
@@ -108,9 +114,11 @@ private:
 		float fit = (*obj)(mat);
 		Mat cand = candidates(state);
 		vector<Mat> neighbours;
+		int height = cand.size().height;
+		int width = cand.size().width;
 
-		for(int i = 0; i < cand.size().height-1; ++i) {
-			for(int j = 0; j < cand.size().width-1; ++j) {
+		for(int i = 0; i < height; ++i) {
+			for(int j = 0; j < width; ++j) {
 				if(cand.at<bool>(i,j)) {
 					Mat aux;
 					state.copyTo(aux);
