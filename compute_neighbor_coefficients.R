@@ -17,8 +17,8 @@ compute_neighbor_coefficients = function(image, size, filename, outputFile) {
 
     sigma <- 2*mean(c(right_neighbor_differences_norm, down_neighbor_differences));
 
-    coefficients_right <- exp(-right_neighbor_differences_norm/(2*sigma^2));
-    coefficients_down <- exp(-down_neighbor_differences_norm/(2*sigma^2));
+    coefficients_right <- exp(-right_neighbor_differences_norm/(sigma));
+    coefficients_down <- exp(-down_neighbor_differences_norm/(sigma));
 
     writePNG(normalize(matrix(coefficients_right, nrow = size, ncol = size-1)), paste(filename, "_coefficients_right.png", sep= ""));
     writePNG(normalize(matrix(coefficients_down, nrow = size-1, ncol = size)), paste(filename, "_coefficients_down.png", sep = ""));

@@ -1,6 +1,7 @@
  generate_2_class_images = function(filename) { 
     library(png);
-
+    library(EBImage);
+    
     data <- read.table(paste(filename, ".mat", sep = ""), sep = "\t");
     data <- apply(data, MARGIN = c(1,2), FUN = as.numeric)
 
