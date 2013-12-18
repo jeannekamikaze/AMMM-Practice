@@ -30,7 +30,7 @@ public:
 
 private:
 	//random noise
-	static Mat random_solution (const Mat &d, const Mat &w, const Mat &s_fg, const Mat &s_bg) {
+	static Mat random_solution (const Mat&, const Mat&, const Mat &s_fg, const Mat &s_bg) {
 		Size s = s_fg.size();
 		Mat sol(s.height, s.width, CV_8UC1);
 		RNG(time(NULL));
@@ -43,7 +43,7 @@ private:
 	}
 
 	//dilating fg
-	static Mat dilating_scrible (const Mat &d, const Mat &w, const Mat &s_fg, const Mat &s_bg) {
+	static Mat dilating_scrible (const Mat&, const Mat&, const Mat &s_fg, const Mat &s_bg) {
 		Size s = s_fg.size();
 		Mat sol(s.height, s.width, CV_8UC1);
 
@@ -58,7 +58,7 @@ private:
 	}
 
 	//bin distances
-	static Mat binarize_distance (const Mat &d, const Mat &w, const Mat &s_fg, const Mat &s_bg) {
+	static Mat binarize_distance (const Mat &d, const Mat&, const Mat &s_fg, const Mat &s_bg) {
 		Size s = s_fg.size();
 		Mat sol(s.height, s.width, CV_8UC1);
 		

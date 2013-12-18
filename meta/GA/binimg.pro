@@ -14,7 +14,7 @@ CONFIG   -= app_bundle
 
 TEMPLATE = app
 
-QMAKE_CXXFLAGS += -O3 --std=c++0x -D_DEBUG -D_DEBUG_OUTPUT
+QMAKE_CXXFLAGS += -O3 --std=c++0x -D_DEBUG -D_DEBUG_OUTPUT -fopenmp
 
 SOURCES += \
     Pool.cc \
@@ -29,6 +29,7 @@ HEADERS += \
     ../ParseDatFile.hpp \
     ../ObjFunc.h \
     crossover.h \
-    mutation.h
+    mutation.h \
+    ../SolGen.hpp
 
-LIBS += -lopencv_core -lSDL2
+LIBS += -lopencv_core -lopencv_imgproc -lopencv_highgui -lSDL2 -lgomp

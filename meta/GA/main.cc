@@ -3,6 +3,7 @@
 #include "crossover.h"
 #include "../ObjFunc.h"
 #include "../ParseDatFile.hpp"
+#include "../SolGen.hpp"
 #include <opencv2/opencv.hpp>
 #include <functional>
 #include <vector>
@@ -12,8 +13,10 @@
 #include <cmath>
 #include <signal.h>
 #include <time.h>
+#include <chrono>
 #include <unistd.h>
 #include <SDL2/SDL.h>
+#include <omp.h>
 
 /// GA
 
@@ -29,7 +32,7 @@ int steps = 10000;           // Number of steps to perform.
 int nElite = 3;              // Maximum number of chromosomes that can be classified as elite.
 double pMutElite = 0.3;      // Probability of mutating a secondary (not the first) elite chromosome.
 double pMutNonElite = 0.5;   // Probability of mutating a non-elite block.
-int nMutBlocks = 4;          // Number of blocks to mutate in a chromosome.
+int nMutBlocks = 8;          // Number of blocks to mutate in a chromosome.
 int nMutants = 0;            // Number of mutants to inject at each step.
 double childAbias = 0.8;     // The probability that a gene is selected from the elite parent in crossover.
 double rBlockSizeMax = 0.1;  // blockSizeMax = max(width, height) * rBlockSizeMax
@@ -39,6 +42,8 @@ double rBlockSizeMax = 0.1;  // blockSizeMax = max(width, height) * rBlockSizeMa
 // Objective function parameters
 cv::Mat d;
 cv::Mat w;
+cv::Mat s_fg;
+cv::Mat s_bg;
 ObjFunc::R lambda = 0.5;
 
 // Variables
@@ -86,11 +91,11 @@ int ilerp(int a, int b, double t)
     return (int) ((double)a + t*((double)(b-a)));
 }
 
-void binarise (const cv::Mat& d, Chromosome& c, float th)
+void binarise (const cv::Mat& bin, Chromosome& c)
 {
-    for (int i = 0; i < d.rows; ++i) {
-        for (int j = 0; j < d.cols; ++j) {
-            if (d.at<float>(i,j) < th) c.set(i,j,0);
+    for (int i = 0; i < bin.rows; ++i) {
+        for (int j = 0; j < bin.cols; ++j) {
+            if (bin.at<char>(i,j) == 0) c.set(i,j,0);
             else c.set(i,j,1);
         }
     }
@@ -114,7 +119,8 @@ void initialise ()
     curGen.push_back(new Chromosome(width, height, 0));
     //zero(*curGen[0]);
     //randomise(*curGen[0]);
-    binarise(d, *curGen[0], 0.0f);
+    cv::Mat bin = SolGen::generate_solution(d, w, s_fg, s_bg, BIN_DISTANCE);
+    binarise(bin, *curGen[0]);
     float th_step = 1.0f / (float) population_size;
     float th = th_step;
     for (int i = 1; i < population_size; ++i, th += th_step) {
@@ -123,7 +129,7 @@ void initialise ()
         curGen.push_back(new Chromosome(width, height, 0));
         //zero(*curGen[i]);
         //randomise(*curGen[i]);
-        binarise(d, *curGen[0], th);
+        binarise(bin, *curGen[0]);
     }
 }
 
@@ -170,7 +176,11 @@ void evaluate (Chromosome& c)
 // Evaluate the population.
 void evaluate ()
 {
-    for (Chromosome* c : curGen) evaluate(*c);
+    //for (Chromosome* c : curGen) evaluate(*c);
+#pragma omp parallel for schedule(static)
+    for (size_t i = 0; i < curGen.size(); ++i) {
+        evaluate(*curGen[i]);
+    }
     std::sort(curGen.begin(), curGen.end(), compare_chromosomes);
     
     // Compute average, min, and max ranks
@@ -263,8 +273,6 @@ void mutate ()
     for (Chromosome* c : nonElite) {
         if (rand01() < pMutNonElite) {
             int B = ilerp(blockSizeMin, blockSizeMax, rand01());
-            //mutate_block_ones(*c, nMutBlocks, B);
-            //mutate_block_ones(*c, nMutBlocks, B);
             if (rand01() < 0.5f) mutate_block_ones(*c, nMutBlocks, B);
             else mutate_block_zeroes(*c, nMutBlocks, B);
         }
@@ -310,6 +318,8 @@ void swapGenerations ()
 
 typedef std::function<void
     (int stepNumber,
+     double elapsed,
+     double dt,
      const CVector& elite,
      const CVector& nonElite,
      const CVector& generation)> OnNewGenerationFunc;
@@ -325,16 +335,25 @@ Chromosome& evolve (const OnNewGenerationFunc& onNewGeneration)
     printf("Initialising GA\n");
     initialise();
     
+    std::chrono::time_point<std::chrono::high_resolution_clock> start, end;
+    double elapsed = 0.0;
+    double dt = 0.0;
+    
     printf("Evolving population (steps = %d)\n", steps);
     for (int i = 1; i <= steps; ++i) {
+        start = std::chrono::high_resolution_clock::now();
         evaluate();
         classify();
         copy_elite();
         mutate();
         cross_population();
         inject_mutants();
-        onNewGeneration(i, elite, nonElite, nextGen);
+        onNewGeneration(i, elapsed, dt, elite, nonElite, nextGen);
         swapGenerations();
+        end = std::chrono::high_resolution_clock::now();
+        dt = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count();
+        dt /= 1000000000.0;
+        elapsed += dt;
         fflush(stdout);
     }
     printf("\n");
@@ -359,10 +378,10 @@ enum RenderMode { DRAW_IMAGE, DRAW_DEBUG };
 RenderMode render_mode = DRAW_IMAGE;
 int renderModeKey = 0;
 
-void print_statistics (int stepNumber)
+void print_statistics (int stepNumber, double elapsed, double dt)
 {
-    printf("%05d: best %f, worst %f, avg %f, stdev %f\n",
-           stepNumber, min_rank, max_rank, avg_rank, rank_stdev);
+    printf("%05d: elapsed %f, dt %f, best %f, worst %f, avg %f, stdev %f\n",
+           stepNumber, elapsed, dt, min_rank, max_rank, avg_rank, rank_stdev);
     
     int n = 1;
     
@@ -437,11 +456,11 @@ void draw_population (SDL_Renderer* rend, const CVector& chroms, int start, int 
 }
 
 void onNewGeneration
-(int stepNumber, const CVector& elite, const CVector& nonElite, const CVector& gen)
+(int stepNumber, double elapsed, double dt, const CVector& elite, const CVector& nonElite, const CVector& gen)
 {
     // Console
     
-    print_statistics(stepNumber);
+    print_statistics(stepNumber, elapsed, dt);
     
     // SDL
     
@@ -554,59 +573,78 @@ int main (int argc, char** argv)
 {
     using namespace std;
     
-    srand(time(NULL)*getpid());
-    
-    if (argc != 2) {
-        fprintf(stderr, "%s <file name>\n", argv[0]);
-        return 0;
+    try
+    {
+        srand(time(NULL)*getpid());
+        
+        if (argc != 2) {
+            fprintf(stderr, "%s <file name>\n", argv[0]);
+            return 0;
+        }
+        
+        std::string fileName = argv[1];
+        std::string dat = fileName + ".dat";
+        std::string bmp = fileName + ".bmp";
+        solutionFile = fileName + "_sol.pgm";
+        std::string scribbleFile = fileName + "-scribble.png";
+        
+        struct sigaction sigIntHandler;
+        
+        sigIntHandler.sa_handler = on_signal;
+        sigemptyset(&sigIntHandler.sa_mask);
+        sigIntHandler.sa_flags = 0;
+        
+        sigaction(SIGINT, &sigIntHandler, NULL);
+        
+        // Load images
+        ParseDatFile parse(dat);
+        parse.parseDandZ(d, w);
+        
+        // Load scribbles
+        cv::Mat scribble = cv::imread(scribbleFile.c_str());
+        if (scribble.empty()) {
+            fprintf(stderr, "Failed loading scribble file %s\n", scribbleFile.c_str());
+            return 0;
+        }
+        vector<Mat> layers;
+        cv::split(scribble, layers);
+        cv::threshold(layers[2], s_fg, 0, 1,THRESH_BINARY);
+        cv::threshold(layers[1], s_bg, 0, 1,THRESH_BINARY);
+        s_fg.convertTo(s_fg, CV_8UC1);
+        s_bg.convertTo(s_bg, CV_8UC1);
+        
+        // Set parameters
+        width  = d.cols;
+        height = d.rows;
+        setupGA(width, height, d, w);
+        
+        xscale = window_width / width;
+        yscale = window_height / height;
+        
+        // Setup SDL
+        SDL_Init(SDL_INIT_VIDEO);
+        wnd = SDL_CreateWindow(
+                    "BinImg",
+                    SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                    window_width, window_height,
+                    SDL_WINDOW_SHOWN);
+        
+        rend = SDL_CreateRenderer(
+                    wnd,
+                    -1,
+                    SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+        
+        SDL_Surface* bmpSurf = SDL_LoadBMP(bmp.c_str());
+        bmpImage = SDL_CreateTextureFromSurface(rend, bmpSurf);
+        SDL_FreeSurface(bmpSurf);
+        
+        // Evolve
+        const Chromosome& best = evolve(onNewGeneration);
+        shutdown(best);
     }
-    
-    std::string fileName = argv[1];
-    std::string dat = fileName + ".dat";
-    std::string bmp = fileName + ".bmp";
-    solutionFile = fileName + "_sol.pgm";
-    
-    struct sigaction sigIntHandler;
-    
-    sigIntHandler.sa_handler = on_signal;
-    sigemptyset(&sigIntHandler.sa_mask);
-    sigIntHandler.sa_flags = 0;
-    
-    sigaction(SIGINT, &sigIntHandler, NULL);
-    
-    ParseDatFile parse(dat);
-    parse.parseDandZ(d, w);
-    
-    cv::Mat bind = binarise(d);
-    write_pgm(bind, "d.pgm");
-    
-    // Set parameters
-    width  = d.cols;
-    height = d.rows;
-    setupGA(width, height, d, w);
-    
-    xscale = window_width / width;
-    yscale = window_height / height;
-    
-    // Setup SDL
-    SDL_Init(SDL_INIT_VIDEO);
-    wnd = SDL_CreateWindow(
-                "BinImg",
-                SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                window_width, window_height,
-                SDL_WINDOW_SHOWN);
-    
-    rend = SDL_CreateRenderer(
-                wnd,
-                -1,
-                SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    
-    SDL_Surface* bmpSurf = SDL_LoadBMP(bmp.c_str());
-    bmpImage = SDL_CreateTextureFromSurface(rend, bmpSurf);
-    SDL_FreeSurface(bmpSurf);
-    
-    // Evolve
-    const Chromosome& best = evolve(onNewGeneration);
-    shutdown(best);
+    catch (const char* ex) {
+        fprintf(stderr, "%s\n", ex);
+    }
+
     return 0;
 }
