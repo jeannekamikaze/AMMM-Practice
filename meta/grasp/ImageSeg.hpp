@@ -1,15 +1,17 @@
 #include <opencv2/opencv.hpp>
 #include "../ObjFunc.h"
-#include "SolGen.hpp"
+#include "../SolGen.hpp"
 #include <time.h>
 
 using namespace cv;
 using namespace std;
 
 int const lambda = 0.1;
-int const MAX_IT_G = 10;
+int const MAX_IT_G = 9;
 int const MAX_IT_H = 100000;
-int const BLOCK_CLASS1_SIZE = 1;
+int const BLOCK_CLASS1_SIZE = 1; //0
+int const BLOCK_CLASS2_SIZE = 1; //1
+int const BLOCK_CLASS3_SIZE = 1; //2
 
 class CVWrap
 {
@@ -147,7 +149,7 @@ private:
 		return fit; 
 	}
 
-	inline void block_change(Mat &aux, int _i, int _j, int block_size, char value) {
+	inline void block_change(Mat &aux, int _i, int _j, int block_size, uchar value) {
 		int left, right, top, bottom;
 		block_limits(aux, _i, _j, block_size, left, right, top, bottom);
 		for(int i = top; i <= bottom; ++i) {
@@ -176,17 +178,21 @@ private:
 				//cout << "Point " << i << " " << j << endl;
 					double orig_fit = block_fit(aux, i, j, BLOCK_CLASS1_SIZE);
 				//cout << "Blok: " << orig_fit << ", Point: "<<local_fit(aux, i,j) << endl;
-					block_change(aux, i, j, BLOCK_CLASS1_SIZE, !aux.at<bool>(i,j));
+
+					uchar orig_val = aux.at<uchar>(i,j);
+					if(orig_val == 1) block_change(aux, i, j, BLOCK_CLASS1_SIZE, 0);
+					if(orig_val == 0) block_change(aux, i, j, BLOCK_CLASS2_SIZE, 1);
+
 					double new_fit = block_fit(aux, i, j, BLOCK_CLASS1_SIZE);
 				//	cout << endl;
 
 					if(new_fit < orig_fit) {
-//hill climb and plateaus
+					//hill climb and plateaus
 					//if(new_fit <= orig_fit) {
 						neighbours.push_back(aux);
 						return neighbours;
 					}
-					block_change(aux, i, j, BLOCK_CLASS1_SIZE, !aux.at<bool>(i,j));
+					block_change(aux, i, j, BLOCK_CLASS1_SIZE, orig_val);
 				}
 			}
 		}
@@ -201,11 +207,9 @@ private:
 		while(!end && i <= MAX_IT_H){
 			//first improvement strategy
 			vector<Mat> neighbours = best_neighbour(current_state);
-			if(neighbours.size() == 0)end = true;
+			if(neighbours.size() == 0) end = true;
 			else current_state = neighbours[0];
-
 			++i;
-			//if(i % 1000 == 0) cout << "ItH: " << i << endl;
 		}
 		//imshow("Candidates", candidates(current_state)*255);
 		//imshow("Currsol", current_state*255);

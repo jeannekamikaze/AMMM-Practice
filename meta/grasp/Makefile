@@ -2,8 +2,8 @@ OPENCV_FLAGS = -lopencv_core -lopencv_imgproc -lopencv_highgui
 OMP_FLAGS = -fopenmp -lpthread
 CFLAGS = $(OPENCV_FLAGS) $(OMP_FLAGS)
 NAME = grasp_seg
-GRASP_CODE = main.cc ImageSeg.hpp SolGen.hpp
-META_CODE = ../ObjFunc.h ../ParseDatFile.hpp
+GRASP_CODE = main.cc ImageSeg.hpp
+META_CODE = ../ObjFunc.h ../ParseDatFile.hpp ../SolGen.hpp
 
 all: grasp_seg
 
