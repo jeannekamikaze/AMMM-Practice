@@ -1,6 +1,6 @@
 int size=...;
 
-float lambda = 0.001;
+float lambda = 1;
 
 range rows=1..size;
 range cols=1..size;
