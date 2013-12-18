@@ -29,8 +29,8 @@ int steps = 10000;           // Number of steps to perform.
 int nElite = 3;              // Maximum number of chromosomes that can be classified as elite.
 double pMutElite = 0.3;      // Probability of mutating a secondary (not the first) elite chromosome.
 double pMutNonElite = 0.5;   // Probability of mutating a non-elite block.
-int nMutBlocks = 1;          // Number of blocks to mutate in a chromosome.
-int nMutants = 2;            // Number of mutants to inject at each step.
+int nMutBlocks = 4;          // Number of blocks to mutate in a chromosome.
+int nMutants = 0;            // Number of mutants to inject at each step.
 double childAbias = 0.8;     // The probability that a gene is selected from the elite parent in crossover.
 double rBlockSizeMax = 0.1;  // blockSizeMax = max(width, height) * rBlockSizeMax
 
@@ -39,7 +39,7 @@ double rBlockSizeMax = 0.1;  // blockSizeMax = max(width, height) * rBlockSizeMa
 // Objective function parameters
 cv::Mat d;
 cv::Mat w;
-ObjFunc::R lambda = 1;
+ObjFunc::R lambda = 0.5;
 
 // Variables
 
@@ -86,11 +86,11 @@ int ilerp(int a, int b, double t)
     return (int) ((double)a + t*((double)(b-a)));
 }
 
-void binarise (const cv::Mat& d, Chromosome& c)
+void binarise (const cv::Mat& d, Chromosome& c, float th)
 {
     for (int i = 0; i < d.rows; ++i) {
         for (int j = 0; j < d.cols; ++j) {
-            if (d.at<float>(i,j) >= 0.5) c.set(i,j,0);
+            if (d.at<float>(i,j) < th) c.set(i,j,0);
             else c.set(i,j,1);
         }
     }
@@ -112,15 +112,18 @@ void zero (Chromosome& c)
 void initialise ()
 {
     curGen.push_back(new Chromosome(width, height, 0));
-    zero(*curGen[0]);
+    //zero(*curGen[0]);
     //randomise(*curGen[0]);
-    //binarise(d, *curGen[0]);
-    for (int i = 1; i < population_size; ++i) {
+    binarise(d, *curGen[0], 0.0f);
+    float th_step = 1.0f / (float) population_size;
+    float th = th_step;
+    for (int i = 1; i < population_size; ++i, th += th_step) {
         /*curGen.push_back(new Chromosome(*curGen[0]));
         mutate(*curGen[i], pMutElite);*/
         curGen.push_back(new Chromosome(width, height, 0));
-        zero(*curGen[i]);
+        //zero(*curGen[i]);
         //randomise(*curGen[i]);
+        binarise(d, *curGen[0], th);
     }
 }
 
@@ -200,6 +203,11 @@ void classify ()
         Chromosome* c = curGen[i];
         if (c->rank <= avg_rank) tmpCVector.push_back(c);
     }
+    
+    if (tmpCVector.size() == 0) {
+        for (int i = 0; i < nElite; ++i) tmpCVector.push_back(curGen[i]);
+    }
+    
     std::sort(tmpCVector.begin(), tmpCVector.end(), compare_chromosomes);
     
     elite.clear();
@@ -243,8 +251,10 @@ void mutate ()
         for (size_t i = 1; i < elite.size(); ++i) {
             if (rand01() < pMutElite) {
                 int B = ilerp(blockSizeMin, blockSizeMax, rand01());
-                mutate_block_ones(*elite[i], nMutBlocks, B);
+                //mutate_block_ones(*elite[i], nMutBlocks, B);
                 //mutate_block(*elite[i], nMutBlocks, B);
+                if (rand01() < 0.5f) mutate_block_ones(*elite[i], nMutBlocks, B);
+                else mutate_block_zeroes(*elite[i], nMutBlocks, B);
             }
         }
     }
@@ -253,7 +263,10 @@ void mutate ()
     for (Chromosome* c : nonElite) {
         if (rand01() < pMutNonElite) {
             int B = ilerp(blockSizeMin, blockSizeMax, rand01());
-            mutate_block_ones(*c, nMutBlocks, B);
+            //mutate_block_ones(*c, nMutBlocks, B);
+            //mutate_block_ones(*c, nMutBlocks, B);
+            if (rand01() < 0.5f) mutate_block_ones(*c, nMutBlocks, B);
+            else mutate_block_zeroes(*c, nMutBlocks, B);
         }
     }
 }
@@ -264,13 +277,16 @@ void mutate ()
 // Fresh new chromosomes are introduced into the next generation.
 void cross_population ()
 {
+    //int B = ilerp(blockSizeMin, blockSizeMax, 0.5f);
     //int N = (population_size - elite.size() - nMutants)/2;
     int N = population_size - elite.size() - nMutants;
     for (int i = 0; i < N; ++i) {
         Chromosome* c1 = elite[std::rand() % elite.size()];
         Chromosome* c2 = nonElite[std::rand() % nonElite.size()];
-        cross_gene2gene_biased(*c1, *c2, nextGen, childAbias);
-        //cross_grid_biased(*c1, *c2, nextGen, blockSize, childAbias);
+        cross_multi(*c1, *c2, nextGen);
+        //cross_grid(*c1, *c2, nextGen, B);
+        //cross_gene2gene_biased(*c1, *c2, nextGen, childAbias);
+        //cross_grid_biased(*c1, *c2, nextGen, B, childAbias);
     }
 }
 

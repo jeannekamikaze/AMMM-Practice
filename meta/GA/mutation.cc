@@ -28,6 +28,16 @@ static void one_out_block (Chromosome& c, int i, int j, int B)
     }
 }
 
+// Zerp-out SxS block at (i,j).
+static void zero_out_block (Chromosome& c, int i, int j, int B)
+{
+    for (int y = 0; y < B; ++y) {
+        for (int x = 0; x < B; ++x) {
+            c.set(i+y, j+x, 0);
+        }
+    }
+}
+
 void mutate_block (Chromosome& c, int N, int B)
 {
     for (int n = 0; n < N; ++n) {
@@ -47,6 +57,17 @@ void mutate_block_ones (Chromosome& c, int N, int B)
         int ymin = std::rand() % (c.height - B);
         // One-out
         one_out_block(c, xmin, ymin, B);
+    }
+}
+
+void mutate_block_zeroes (Chromosome& c, int N, int B)
+{
+    for (int n = 0; n < N; ++n) {
+        // Choose a random block
+        int xmin = std::rand() % (c.width - B);
+        int ymin = std::rand() % (c.height - B);
+        // Zero-out
+        zero_out_block(c, xmin, ymin, B);
     }
 }
 

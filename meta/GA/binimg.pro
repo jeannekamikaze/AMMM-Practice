@@ -26,9 +26,9 @@ SOURCES += \
 HEADERS += \
     Pool.h \
     Chromosome.h \
-    crossover.h \
-    mutation.h \
     ../ParseDatFile.hpp \
-    ../ObjFunc.h
+    ../ObjFunc.h \
+    crossover.h \
+    mutation.h
 
-LIBS += -lopencv_core -lSDL2 -lSDL2_gfx
+LIBS += -lopencv_core -lSDL2
