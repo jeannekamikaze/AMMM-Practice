@@ -9,6 +9,7 @@ using namespace std;
 int const lambda = 0.1;
 int const MAX_IT_G = 10;
 int const MAX_IT_H = 100000;
+int const BLOCK_CLASS1_SIZE = 1;
 
 class CVWrap
 {
@@ -56,8 +57,8 @@ private:
 	Mat w_coef;
 
 	Mat grasp () {
-		Mat best_sol = SolGen::generate_solution(dists, w_coef, s_fg, s_bg);
-//		imshow("Sol: ", best_sol*255);
+		//mode = RANDOM_NOISE, DILATING_SCRIBBLE, BIN_DISTANCE
+		Mat best_sol = SolGen::generate_solution(dists, w_coef, s_fg, s_bg, DILATING_SCRIBBLE); 
 		best_sol = hill_climing(best_sol);
 		CVWrap cmat(best_sol);
 		float best_fit = (*obj)(cmat);
@@ -66,7 +67,7 @@ private:
 
 		#pragma omp parallel for shared(best_fit, best_sol) schedule(dynamic) //num_threads(4)
 		for(int i = 1; i < MAX_IT_G; ++i) {
-			Mat sol = SolGen::generate_solution(dists, w_coef, s_fg, s_bg);
+			Mat sol = SolGen::generate_solution(dists, w_coef, s_fg, s_bg, DILATING_SCRIBBLE);
 			sol = hill_climing(sol);
 			cmat = CVWrap(sol);
 			float fit = (*obj)(cmat);
@@ -109,6 +110,53 @@ private:
     	return local_fit;
 	}
 
+	template <typename T> T CLAMP(T value, T low, T high)
+	{
+		return (value < low) ? low : ((value > high) ? high : value);
+	}
+
+	inline void block_limits(const Mat &aux, int _i, int _j, int block_size, int &left, int &right, int &top, int &bottom) {
+		block_size = block_size - 1;
+		int side1 = block_size/2;
+		int side2 = block_size - side1;
+
+		int min = 0;
+		int max_h = aux.size().width;
+		int max_v = aux.size().height;
+
+		left = CLAMP(_j - side1, min, max_h);
+		right = CLAMP(_j + side2, min, max_h);
+
+		top = CLAMP(_i - side1, min, max_v);
+		bottom = CLAMP(_i + side2,  min, max_v);
+
+	}
+
+	inline double block_fit(const Mat &aux, int _i, int _j, int block_size) {
+		int left, right, top, bottom;
+		block_limits(aux, _i, _j, block_size, left, right, top, bottom);
+		double fit = 0;
+//cout << "i: " << _i << ", top: " << top << ", bottom: " << bottom << endl;
+		if(top > 0 ) top = top - 1;
+		if(left > 0 ) left = left - 1;
+		for(int i = top; i <= bottom; ++i) {
+			for(int j = left; j <= right; ++j) {
+				fit += local_fit(aux, i, j);
+			}
+		}
+		return fit; 
+	}
+
+	inline void block_change(Mat &aux, int _i, int _j, int block_size, char value) {
+		int left, right, top, bottom;
+		block_limits(aux, _i, _j, block_size, left, right, top, bottom);
+		for(int i = top; i <= bottom; ++i) {
+			for(int j = left; j <= right; ++j) {
+				aux.at<char>(i,j) = value;
+			}
+		}
+	}
+
 	vector<Mat> best_neighbour(const Mat &state) {
 		CVWrap mat(state);
 		float fit = (*obj)(mat);
@@ -117,29 +165,28 @@ private:
 		int height = cand.size().height;
 		int width = cand.size().width;
 
+		Mat aux;
+		state.copyTo(aux);
+
 		for(int i = 0; i < height; ++i) {
 			for(int j = 0; j < width; ++j) {
 				if(cand.at<bool>(i,j)) {
-					Mat aux;
-					state.copyTo(aux);
-					
-					double orig_fit = local_fit(aux, i,j);
-					if(i > 1) orig_fit += local_fit(aux, i-1,j);
-					if(j > 1) orig_fit += local_fit(aux, i,j-1);
+					//Mat aux;
+					//state.copyTo(aux);
+				//cout << "Point " << i << " " << j << endl;
+					double orig_fit = block_fit(aux, i, j, BLOCK_CLASS1_SIZE);
+				//cout << "Blok: " << orig_fit << ", Point: "<<local_fit(aux, i,j) << endl;
+					block_change(aux, i, j, BLOCK_CLASS1_SIZE, !aux.at<bool>(i,j));
+					double new_fit = block_fit(aux, i, j, BLOCK_CLASS1_SIZE);
+				//	cout << endl;
 
-					aux.at<bool>(i,j) = ! aux.at<bool>(i,j);
-
-					double new_fit = local_fit(aux, i,j);
-					if(i > 1) new_fit += local_fit(aux, i-1,j);
-					if(j > 1) new_fit += local_fit(aux, i,j-1);
-
-//hill climb
 					if(new_fit < orig_fit) {
 //hill climb and plateaus
 					//if(new_fit <= orig_fit) {
 						neighbours.push_back(aux);
 						return neighbours;
 					}
+					block_change(aux, i, j, BLOCK_CLASS1_SIZE, !aux.at<bool>(i,j));
 				}
 			}
 		}
