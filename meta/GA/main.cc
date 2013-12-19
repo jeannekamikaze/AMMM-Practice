@@ -348,7 +348,14 @@ Chromosome& evolve (const OnNewGenerationFunc& onNewGeneration)
         mutate();
         cross_population();
         inject_mutants();
+        end = std::chrono::high_resolution_clock::now();
+        dt = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count();
+        dt /= 1000000000.0;
+        elapsed += dt;
+        
         onNewGeneration(i, elapsed, dt, elite, nonElite, nextGen);
+        
+        start = std::chrono::high_resolution_clock::now();
         swapGenerations();
         end = std::chrono::high_resolution_clock::now();
         dt = std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count();
@@ -481,8 +488,8 @@ void onNewGeneration
         SDL_Rect vp = {0, 0, window_width, window_height};
         SDL_RenderCopy(rend, bmpImage, &imgRect, &vp);
         // Draw best
-        SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_MOD);
-        SDL_SetRenderDrawColor(rend, 0, 0, 0, 255);
+        SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(rend, 0, 0, 0, 200);
         draw_chromosome_complementary(rend, *elite[0]);
         SDL_SetRenderDrawBlendMode(rend, SDL_BLENDMODE_NONE);
     }
